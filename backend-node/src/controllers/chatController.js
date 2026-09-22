@@ -6,8 +6,13 @@ export async function sendMessage(req, res, next) {
     const { message, history = [] } = req.body;
     const userId = req.user._id;
 
+    // Lưu tin user
     await ChatMessage.create({ userId, role: 'user', content: message });
+
+    // Gọi AI
     const aiText = await getAIResponse(message, history);
+
+    // Lưu tin AI
     await ChatMessage.create({ userId, role: 'assistant', content: aiText });
 
     res.json({

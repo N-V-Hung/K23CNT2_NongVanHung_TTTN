@@ -7,7 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Khi mở app → kiểm tra token còn hạn không
+  // Load user từ localStorage khi mở app
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('token');
@@ -16,14 +16,12 @@ export function AuthProvider({ children }) {
       if (token && savedUser) {
         try {
           setUser(JSON.parse(savedUser));
-          // Xác minh token còn hiệu lực
           const res = await api.getMe();
           setUser(res.data.user);
           localStorage.setItem('user', JSON.stringify(res.data.user));
         } catch (err) {
           console.error('Token không hợp lệ:', err.message);
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          clearStorage();
           setUser(null);
         }
       }
@@ -32,15 +30,40 @@ export function AuthProvider({ children }) {
     initAuth();
   }, []);
 
-  const loginUser = async (username, password) => {
-    const res = await api.login(username, password);
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('user', JSON.stringify(res.data.user));
-    setUser(res.data.user);
-    return res.data.user;
-  };
+const clearStorage = () => {
+  // Xóa token + user
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
 
+  // Xóa cache chat trong sessionStorage (tất cả key bắt đầu bằng "chat_session_")
+  try {
+    Object.keys(sessionStorage).forEach(key => {
+      if (key.startsWith('chat_session_')) {
+        sessionStorage.removeItem(key);
+      }
+    });
+  } catch (err) {
+    console.error('Lỗi xóa sessionStorage:', err);
+  }
+};
+
+  const loginUser = async (username, password) => {
+  clearStorage();
+  const res = await api.login(username, password);
+
+  // Nếu cần 2FA → không lưu token, trả nguyên response cho LoginPage
+  if (res.require2FA) {
+    return res;
+  }
+
+  // Đăng nhập bình thường
+  localStorage.setItem('token', res.data.token);
+  localStorage.setItem('user', JSON.stringify(res.data.user));
+  setUser(res.data.user);
+  return res.data.user;
+};
   const registerUser = async (data) => {
+    clearStorage();
     const res = await api.register(data);
     localStorage.setItem('token', res.data.token);
     localStorage.setItem('user', JSON.stringify(res.data.user));
@@ -49,9 +72,14 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearStorage();
     setUser(null);
+  };
+
+  // Cập nhật user trong context + localStorage
+  const setUserData = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
   return (
@@ -61,6 +89,7 @@ export function AuthProvider({ children }) {
       login: loginUser,
       register: registerUser,
       logout,
+      setUserData,                
       isAdmin: user?.role === 'admin',
     }}>
       {children}

@@ -3,19 +3,19 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import ChatPage from './pages/ChatPage';
+import HistoryPage from './pages/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
 import LogsPage from './pages/LogsPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
+import UsersPage from './pages/UsersPage';
 import LoginPage from './pages/LoginPage';
 
 export default function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Route công khai */}
         <Route path="/login" element={<LoginPage />} />
-
-        {/* Route cần đăng nhập */}
         <Route
           path="/*"
           element={
@@ -26,9 +26,12 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/chat" />} />
                     <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/history" element={<HistoryPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/users" element={<UsersPage />} />
                   </Routes>
                 </div>
               </div>

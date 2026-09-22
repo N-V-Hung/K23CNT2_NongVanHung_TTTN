@@ -4,6 +4,7 @@ import Header from '../components/Header'
 import MessageBubble from '../components/MessageBubble'
 import QuickActions from '../components/QuickActions'
 import { sendChatMessage } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const WELCOME = {
   role: 'assistant',
@@ -18,35 +19,62 @@ Tôi có thể hỗ trợ:
 Hãy hỏi tôi bất cứ điều gì hoặc chọn hành động nhanh bên dưới.`,
 }
 
-export default function ChatPage() {
-  const [messages, setMessages] = useState(() => {
-  // Đọc từ localStorage khi mở lại
-  try {
-    const saved = localStorage.getItem('chat_messages')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
-      }
-    }
-  } catch (err) {
-    console.error('Lỗi đọc chat history:', err)
-  }
-  return [WELCOME]
-})
+// Key lưu tin nhắn theo user
+const chatKey = (userId) => `chat_session_${userId}`
 
-// Tự động lưu mỗi khi messages thay đổi
-useEffect(() => {
-  try {
-    localStorage.setItem('chat_messages', JSON.stringify(messages))
-  } catch (err) {
-    console.error('Lỗi lưu chat history:', err)
-  }
-}, [messages])
+export default function ChatPage() {
+  const { user } = useAuth()
+  const [messages, setMessages] = useState([WELCOME])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
+  const initialized = useRef(false)
 
+  // ===== Khởi tạo: đọc từ sessionStorage khi mount =====
+  useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+
+    if (!user) {
+      setMessages([WELCOME])
+      return
+    }
+
+    try {
+      const saved = sessionStorage.getItem(chatKey(user.id))
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed)
+          return
+        }
+      }
+    } catch (err) {
+      console.error('Không đọc được cache chat:', err)
+    }
+    setMessages([WELCOME])
+  }, [user?.id])
+
+  // ===== Khi user thay đổi (login user khác / logout) → reset =====
+  useEffect(() => {
+    if (!user) {
+      setMessages([WELCOME])
+      setInput('')
+      return
+    }
+  }, [user?.id])
+
+  // ===== Tự động lưu vào sessionStorage mỗi khi messages thay đổi =====
+  useEffect(() => {
+    if (!user) return
+    try {
+      sessionStorage.setItem(chatKey(user.id), JSON.stringify(messages))
+    } catch (err) {
+      console.error('Không lưu được cache chat:', err)
+    }
+  }, [messages, user?.id])
+
+  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
@@ -64,22 +92,23 @@ useEffect(() => {
       const res = await sendChatMessage(content, messages)
       setMessages(prev => [...prev, { role: 'assistant', content: res.content }])
     } catch (err) {
-      const errMsg = err.response?.data?.message || '❌ Có lỗi xảy ra khi kết nối tới server. Vui lòng thử lại.'
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: '❌ Có lỗi xảy ra khi kết nối tới server. Vui lòng thử lại.' },
-      ])
+      const errMsg = err.response?.data?.message || 'Có lỗi xảy ra khi kết nối tới server'
+      setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${errMsg}` }])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleClear = () => setMessages([WELCOME])
+  // Xóa hội thoại trên màn hình (không xóa lịch sử server)
+  const handleClear = () => {
+    if (!confirm('Xóa hội thoại đang hiển thị trên màn hình?')) return
+    setMessages([WELCOME])
+    if (user) sessionStorage.removeItem(chatKey(user.id))
+  }
 
   return (
     <>
       <Header title="Trợ lý AI" />
-
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="max-w-4xl mx-auto">
@@ -110,7 +139,7 @@ useEffect(() => {
             <button
               onClick={handleClear}
               className="p-3 rounded-lg bg-dark-700 hover:bg-dark-600 text-gray-400 transition"
-              title="Xóa hội thoại"
+              title="Xóa màn hình chat"
             >
               <Trash2 size={18} />
             </button>
@@ -132,14 +161,14 @@ useEffect(() => {
               <button
                 onClick={() => handleSend()}
                 disabled={!input.trim() || loading}
-                className="absolute right-2 bottom-2 p-2 rounded-md bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white transition"
+                className="absolute right-2 bottom-2 p-2 rounded-md bg-accent hover:bg-accent-hover disabled:opacity-40 text-white transition"
               >
                 <Send size={16} />
               </button>
             </div>
           </div>
           <p className="text-center text-xs text-gray-500 mt-2">
-            AI có thể mắc lỗi. Hãy xác minh các hành động quan trọng.
+            Tin nhắn tự động lưu vào **Lịch sử chat** — xem ở menu trái.
           </p>
         </div>
       </div>

@@ -27,6 +27,16 @@ router.post(
   authController.login
 );
 
+router.post(
+  '/verify-2fa',
+  [
+    body('tempToken').notEmpty().withMessage('Thiếu tempToken'),
+    body('code').isLength({ min: 6, max: 6 }).withMessage('Mã phải 6 chữ số'),
+  ],
+  validate,
+  authController.verifyLogin2FA
+);
+
 router.get('/me', requireAuth, authController.getMe);
 
 export default router;

@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 
 import './models/User.js';
 import './models/ChatMessage.js';
+import './models/Server.js';
 
 async function start() {
   try {

@@ -20,6 +20,9 @@ const userSchema = new mongoose.Schema(
       match: [/^\S+@\S+\.\S+$/, 'Email không hợp lệ'],
     },
     fullName: { type: String, default: '', trim: true },
+    avatar: { type: String, default: '' },
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorSecret: { type: String, default: '', select: false },
     password: {
       type: String,
       required: [true, 'Mật khẩu không được để trống'],
@@ -38,6 +41,7 @@ const userSchema = new mongoose.Schema(
         delete ret._id;
         delete ret.__v;
         delete ret.password;
+        delete ret.twoFactorSecret;
         return ret;
       },
     },
