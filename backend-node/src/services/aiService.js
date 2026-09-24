@@ -35,7 +35,6 @@ async function getSystemContext() {
         context += `| ${s.name} | ${s.ip} | ${s.group || 'default'} | ${s.cpu}% | ${s.ram}% | ${statusText} |\n`;
       });
 
-      // Cảnh báo server quá tải
       const overloaded = servers.filter(s => s.cpu >= 80 || s.ram >= 80);
       if (overloaded.length > 0) {
         context += `\n**⚠️ Server quá tải (CPU/RAM ≥ 80%):**\n`;
@@ -54,13 +53,12 @@ async function getSystemContext() {
 }
 
 // ============================================================
-// 2. MOCK RESPONSE (khi chưa có Gemini key)
+// 2. MOCK RESPONSE
 // ============================================================
 
 async function mockResponse(message) {
   const lower = message.toLowerCase();
 
-  // Trả lời động dựa trên dữ liệu thật
   if (lower.includes('server')) {
     const servers = await Server.find().sort({ name: 1 }).lean();
 
@@ -116,9 +114,8 @@ async function mockResponse(message) {
 
   if (lower.includes('user') || lower.includes('người dùng')) {
     const users = await User.find().sort({ createdAt: -1 }).limit(20).lean();
-    if (users.length === 0) {
-      return `Chưa có user nào trong hệ thống.`;
-    }
+    if (users.length === 0) return `Chưa có user nào trong hệ thống.`;
+
     let md = `### 👥 Danh sách User (${users.length})\n\n| Username | Role | Trạng thái |\n|----------|------|------------|\n`;
     users.forEach(u => {
       const role = u.role === 'admin' ? '👑 Admin' : '👤 User';
@@ -151,13 +148,11 @@ Tôi có thể hỗ trợ:
 }
 
 // ============================================================
-// 3. GEMINI RESPONSE (dùng AI thật + context từ DB)
+// 3. GEMINI RESPONSE
 // ============================================================
 
 async function geminiResponse(message, history) {
   const genAI = new GoogleGenerativeAI(env.ai.geminiApiKey);
-
-  // Lấy dữ liệu thật từ DB
   const context = await getSystemContext();
 
   const systemPrompt = `Bạn là **trợ lý AI quản trị hệ thống CNTT** (IT Admin Assistant).
@@ -173,14 +168,30 @@ ${context}
 5. Nếu dữ liệu trống → hướng dẫn user cách thêm`;
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-3.6-flash',
     systemInstruction: systemPrompt,
   });
 
-  const chatHistory = history.slice(-10).map(h => ({
+  // ===== LỌC LỊCH SỬ =====
+  let filtered = (history || []).filter(h => h && h.content && h.content.trim());
+
+  const firstUserIdx = filtered.findIndex(h => h.role === 'user');
+  if (firstUserIdx > 0) {
+    filtered = filtered.slice(firstUserIdx);
+  } else if (firstUserIdx === -1) {
+    filtered = [];
+  }
+
+  const chatHistory = filtered.slice(-10).map(h => ({
     role: h.role === 'user' ? 'user' : 'model',
     parts: [{ text: h.content }],
   }));
+
+  // History rỗng → gọi trực tiếp
+  if (chatHistory.length === 0) {
+    const result = await model.generateContent(message);
+    return result.response.text();
+  }
 
   const chat = model.startChat({ history: chatHistory });
   const result = await chat.sendMessage(message);
