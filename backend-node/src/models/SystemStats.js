@@ -7,6 +7,7 @@ const systemStatsSchema = new mongoose.Schema(
     net: { type: Number, default: 0 },
     uptimePercent: { type: Number, default: 99.9 },
   },
+  
   { timestamps: true }
 );
 
